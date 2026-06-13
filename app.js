@@ -36,9 +36,13 @@ const REG_DETECTION_SCORE_MIN = 0.68;
 
 // ─── Angle definitions ───────────────────────────────────────
 const ANGLES = [
-  { key: "front", label: "😐 Front Face", icon: "😐", instruction: "Look straight at the camera" },
-  { key: "left",  label: "← Left Face",  icon: "←",  instruction: "Slowly turn your head to the LEFT" },
-  { key: "right", label: "Right Face →", icon: "→",  instruction: "Slowly turn your head to the RIGHT" },
+  { key: "front",      label: "😐 Front",       icon: "😐", instruction: "Look straight at the camera" },
+  { key: "left",       label: "← Left",          icon: "←",  instruction: "Slowly turn head to the LEFT" },
+  { key: "right",      label: "Right →",         icon: "→",  instruction: "Slowly turn head to the RIGHT" },
+  { key: "up",         label: "↑ Up",            icon: "↑",  instruction: "Tilt head slightly UP (for cap wearers)" },
+  { key: "down",       label: "↓ Down",          icon: "↓",  instruction: "Tilt head slightly DOWN (for hair over face)" },
+  { key: "tilt_left",  label: "↗ Tilt Left",    icon: "↗",  instruction: "Tilt head diagonally to upper-left" },
+  { key: "tilt_right", label: "↘ Tilt Right",   icon: "↘",  instruction: "Tilt head diagonally to upper-right" },
 ];
 
 // ─── Live attendance constants ────────────────────────────────
@@ -64,12 +68,12 @@ const state = {
 
   registerPhoto: null,
   registerDescriptors: null,
-  angleData: { front: null, left: null, right: null },
+  angleData: { front: null, left: null, right: null, up: null, down: null, tilt_left: null, tilt_right: null },
   currentAngleIndex: 0,
   isUpdateMode: false,
 
   // Upload-from-photo registration
-  uploadedAngleFiles: { front: null, left: null, right: null },
+  uploadedAngleFiles: { front: null, left: null, right: null, up: null, down: null, tilt_left: null, tilt_right: null },
 
   attendancePhoto: null,
   liveMatches: [],
@@ -550,19 +554,19 @@ function updateAngleUI() {
     );
     if (i < idx) {
       pill.classList.add("border-emerald-500", "bg-emerald-500/10", "text-emerald-300");
-      pill.textContent = ANGLES[i].label.replace(ANGLES[i].icon, "✓");
+      pill.textContent = "✓ " + ANGLES[i].icon;
     } else if (i === idx) {
       pill.classList.add("border-sky-500", "bg-sky-500/10", "text-sky-300");
       pill.textContent = ANGLES[i].label;
     } else {
       pill.classList.add("border-slate-600", "text-slate-500");
-      pill.textContent = ANGLES[i].label;
+      pill.textContent = ANGLES[i].icon;
     }
   });
   const instrEl = document.getElementById("angle-instruction");
   if (instrEl) {
     instrEl.textContent = idx < ANGLES.length
-      ? `Step ${idx + 1} of 3: ${angle.instruction}`
+      ? `Step ${idx + 1} of ${ANGLES.length}: ${angle.instruction}`
       : "All angles captured! Fill in details and register.";
   }
   if (dom.captureAngleBtn) {
@@ -623,13 +627,17 @@ function mergeAngleDescriptors() {
     if (d?.descriptors?.length) all.push(...d.descriptors);
   }
   state.registerDescriptors = all;
-  state.registerPhoto = state.angleData.front?.photo || state.angleData.left?.photo || state.angleData.right?.photo;
+  state.registerPhoto = state.angleData.front?.photo
+    || state.angleData.left?.photo
+    || state.angleData.right?.photo
+    || state.angleData.up?.photo
+    || state.angleData.down?.photo;
   if (state.registerPhoto) {
     dom.registerPhotoPreview.src = state.registerPhoto;
     dom.registerPreview.classList.remove("hidden");
   }
   dom.registerStatus.textContent =
-    `✅ All 3 angles captured (${all.length} total face samples). Fill details and register.`;
+    `✅ All ${ANGLES.length} angles captured (${all.length} total face samples). Fill details and register.`;
 }
 
 async function captureAngleVideo(videoElement, canvasElement) {
@@ -666,13 +674,13 @@ async function captureRegisterPhoto() {
 
 function resetAllAngles() {
   state.currentAngleIndex  = 0;
-  state.angleData          = { front: null, left: null, right: null };
+  state.angleData          = { front: null, left: null, right: null, up: null, down: null, tilt_left: null, tilt_right: null };
   state.registerDescriptors= null;
   state.registerPhoto      = null;
   state.regCollectedDescriptors = [];
   state.regCollectedPhotos = [];
   state.isUpdateMode       = false;
-  state.uploadedAngleFiles = { front: null, left: null, right: null };
+  state.uploadedAngleFiles = { front: null, left: null, right: null, up: null, down: null, tilt_left: null, tilt_right: null };
   for (const angle of ANGLES) {
     const thumb = document.getElementById(`thumb-${angle.key}`);
     if (thumb) {
@@ -1446,34 +1454,14 @@ async function runLiveRecognition() {
 }
 
 function rankStudentsByMultiEmbedding(descriptor, dynThreshold) {
-  const threshold = dynThreshold ?? Number(state.settings.matchThreshold);
-
-  // ── FAST PATH: averaged descriptor ──────────────────────────
-  const fastRanked = state.students
-    .map(student => {
-      const avg = getAvgDescriptor(student);
-      if (!avg) return { student, distance: null };
-      return { student, distance: descriptorDistance(descriptor, avg) };
-    })
-    .filter(r => r.distance !== null)
-    .sort((a, b) => a.distance - b.distance);
-
-  const bestFast = fastRanked[0];
-
-  // If top match is confident, return fast result immediately
-  if (bestFast && bestFast.distance !== null && bestFast.distance <= threshold) {
-    return fastRanked;
-  }
-
-  // ── FALLBACK PATH: full individual embeddings ────────────────
-  // Only runs if fast path gave no confident match
+  // Use full individual embeddings only — most accurate
   const withDescriptors = state.students.filter(s =>
     Array.isArray(s.descriptors) && s.descriptors.length > 0
   );
   const legacyOnly = state.students.filter(s =>
     !Array.isArray(s.descriptors) && Array.isArray(s.descriptor)
   );
-  const fullRanked = [
+  const ranked = [
     ...withDescriptors.map(student => {
       const distances = student.descriptors.map(emb => descriptorDistance(descriptor, emb));
       const minDist   = Math.min(...distances);
@@ -1489,7 +1477,7 @@ function rankStudentsByMultiEmbedding(descriptor, dynThreshold) {
     .filter(s => !Array.isArray(s.descriptors) && !Array.isArray(s.descriptor))
     .map(s => ({ student: s, distance: null }));
 
-  return [...fullRanked, ...noDescriptor];
+  return [...ranked, ...noDescriptor];
 }
 
 // ─── Liveness Detection ───────────────────────────────────────
