@@ -376,13 +376,17 @@
 
             <!-- Multi-angle face capture -->
             <div class="mt-4">
-              <label class="block text-sm font-medium text-slate-400 mb-3">Capture Student Face (3 Angles)</label>
+              <label class="block text-sm font-medium text-slate-400 mb-3">Capture Student Face (7 Angles)</label>
 
               <!-- Angle step indicator -->
-              <div id="angle-step-indicator" class="flex gap-2 mb-3">
-                <div class="angle-step-pill flex-1 text-center py-2 px-2 rounded-2xl text-xs font-semibold border-2 border-sky-500 bg-sky-500/10 text-sky-300" data-step="0">😐 Front</div>
-                <div class="angle-step-pill flex-1 text-center py-2 px-2 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="1">← Left</div>
-                <div class="angle-step-pill flex-1 text-center py-2 px-2 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="2">Right →</div>
+              <div id="angle-step-indicator" class="flex flex-wrap gap-1 mb-3">
+                <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-sky-500 bg-sky-500/10 text-sky-300" data-step="0">😐 Front</div>
+                <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="1">←</div>
+                <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="2">→</div>
+                <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="3">↑</div>
+                <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="4">↓</div>
+                <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="5">↗</div>
+                <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="6">↘</div>
               </div>
 
               <!-- Angle instruction -->
@@ -390,19 +394,35 @@
                 Start camera, then capture each angle one by one.
               </div>
 
-              <!-- Captured angle thumbnails (live camera) -->
-              <div class="flex gap-2 mb-3" id="angle-thumbnails">
-                <div class="flex-1 flex flex-col items-center gap-1">
-                  <div id="thumb-front" class="w-full aspect-square rounded-2xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-2xl text-slate-600 overflow-hidden">😐</div>
+              <!-- Captured angle thumbnails -->
+              <div class="grid grid-cols-7 gap-1 mb-3" id="angle-thumbnails">
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-front" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">😐</div>
                   <span class="text-xs text-slate-500">Front</span>
                 </div>
-                <div class="flex-1 flex flex-col items-center gap-1">
-                  <div id="thumb-left" class="w-full aspect-square rounded-2xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-2xl text-slate-600 overflow-hidden">←</div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-left" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">←</div>
                   <span class="text-xs text-slate-500">Left</span>
                 </div>
-                <div class="flex-1 flex flex-col items-center gap-1">
-                  <div id="thumb-right" class="w-full aspect-square rounded-2xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-2xl text-slate-600 overflow-hidden">→</div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-right" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">→</div>
                   <span class="text-xs text-slate-500">Right</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-up" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">↑</div>
+                  <span class="text-xs text-slate-500">Up</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-down" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">↓</div>
+                  <span class="text-xs text-slate-500">Down</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-tilt_left" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">↗</div>
+                  <span class="text-xs text-slate-500">T.Left</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-tilt_right" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">↘</div>
+                  <span class="text-xs text-slate-500">T.Right</span>
                 </div>
               </div>
 
@@ -440,7 +460,7 @@
               </div>
 
               <p id="register-status" class="text-sm text-slate-400 mt-3">
-                Start the camera and capture 3 angles: Front → Left → Right.
+                Start the camera and capture 7 angles: Front → Left → Right → Up → Down → Tilt Left → Tilt Right.
               </p>
 
               <!-- FIX #5: Upload from photos section -->
