@@ -374,11 +374,11 @@
                 class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 rounded-2xl px-4 py-3 text-base outline-none" />
             </div>
 
-            <!-- Multi-angle face capture -->
+            <!-- Multi-angle face capture — Guided Auto Mode -->
             <div class="mt-4">
-              <label class="block text-sm font-medium text-slate-400 mb-3">Capture Student Face (7 Angles)</label>
+              <label class="block text-sm font-medium text-slate-400 mb-3">Face Scan — Auto Guided (7 Angles)</label>
 
-              <!-- Angle step indicator -->
+              <!-- Progress pills -->
               <div id="angle-step-indicator" class="flex flex-wrap gap-1 mb-3">
                 <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-sky-500 bg-sky-500/10 text-sky-300" data-step="0">😐 Front</div>
                 <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="1">←</div>
@@ -389,47 +389,15 @@
                 <div class="angle-step-pill flex-1 text-center py-2 px-1 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="6">↘</div>
               </div>
 
-              <!-- Angle instruction -->
-              <div id="angle-instruction" class="mb-3 text-center bg-slate-800 rounded-2xl py-2 px-3 text-sm text-slate-300">
-                Start camera, then capture each angle one by one.
+              <!-- Instruction bar -->
+              <div id="angle-instruction" class="mb-3 text-center bg-slate-800 rounded-2xl py-2 px-3 text-sm text-slate-300 font-semibold">
+                Start camera — face guide will appear automatically
               </div>
 
-              <!-- Captured angle thumbnails -->
-              <div class="grid grid-cols-7 gap-1 mb-3" id="angle-thumbnails">
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-front" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">😐</div>
-                  <span class="text-xs text-slate-500">Front</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-left" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">←</div>
-                  <span class="text-xs text-slate-500">Left</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-right" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">→</div>
-                  <span class="text-xs text-slate-500">Right</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-up" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">↑</div>
-                  <span class="text-xs text-slate-500">Up</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-down" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">↓</div>
-                  <span class="text-xs text-slate-500">Down</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-tilt_left" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">↗</div>
-                  <span class="text-xs text-slate-500">T.Left</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-tilt_right" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-lg text-slate-600 overflow-hidden">↘</div>
-                  <span class="text-xs text-slate-500">T.Right</span>
-                </div>
-              </div>
-
-              <!-- Camera box - circular like scan attendance -->
-              <div style="
-                width: min(72vw, 480px);
-                height: min(72vw, 480px);
+              <!-- Camera + Guided Overlay -->
+              <div id="reg-camera-wrap" style="
+                width: min(72vw, 380px);
+                height: min(72vw, 380px);
                 border-radius: 50%;
                 overflow: hidden;
                 position: relative;
@@ -438,9 +406,35 @@
                 box-shadow: 0 0 0 4px rgba(255,255,255,0.2), 0 0 60px rgba(255,255,255,0.5), 0 0 100px rgba(255,255,255,0.2);
                 background: #0f172a;
               ">
-                <video id="register-video" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;transform:scale(0.85);transform-origin:center center;"></video>
+                <video id="register-video" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>
                 <canvas id="register-canvas" class="hidden"></canvas>
-                <div id="register-overlay" style="border-radius:50%;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
+
+                <!-- SVG Guided Face Overlay -->
+                <svg id="reg-guide-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none;" viewBox="0 0 300 300">
+                  <!-- Dummy face outline — moves per angle -->
+                  <g id="guide-face-group" style="transition: transform 0.5s ease;">
+                    <!-- Head oval -->
+                    <ellipse id="guide-head" cx="150" cy="145" rx="72" ry="88" fill="none" stroke="#38bdf8" stroke-width="3" stroke-dasharray="8 4" opacity="0.85"/>
+                    <!-- Eyes -->
+                    <ellipse cx="125" cy="128" rx="10" ry="6" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.7"/>
+                    <ellipse cx="175" cy="128" rx="10" ry="6" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.7"/>
+                    <!-- Nose -->
+                    <path d="M150 138 L144 158 Q150 163 156 158 Z" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.6"/>
+                    <!-- Mouth -->
+                    <path d="M135 172 Q150 182 165 172" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.7"/>
+                  </g>
+                  <!-- Arrow guide -->
+                  <text id="guide-arrow" x="150" y="36" text-anchor="middle" font-size="28" fill="#facc15" opacity="0.95"></text>
+                  <!-- Match ring — shown when aligned -->
+                  <circle id="guide-match-ring" cx="150" cy="145" r="96" fill="none" stroke="#22c55e" stroke-width="5" opacity="0" style="transition:opacity 0.3s;"/>
+                  <!-- Countdown arc -->
+                  <circle id="guide-countdown" cx="150" cy="145" r="96" fill="none" stroke="#22c55e" stroke-width="5"
+                    stroke-dasharray="603" stroke-dashoffset="603" stroke-linecap="round"
+                    transform="rotate(-90 150 145)" opacity="0" style="transition:stroke-dashoffset 0.1s linear;"/>
+                </svg>
+
+                <!-- Start overlay -->
+                <div id="register-overlay" style="border-radius:50%;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);">
                   <button type="button" onclick="startRegisterCamera()" id="start-register-btn"
                     class="bg-white text-slate-900 px-6 py-3 rounded-3xl font-semibold flex items-center gap-x-2">
                     <span>📸 Start Camera</span>
@@ -448,19 +442,49 @@
                 </div>
               </div>
 
-              <div class="flex flex-col sm:flex-row gap-3 mt-3">
-                <button type="button" id="capture-angle-btn" onclick="captureCurrentAngle()"
-                  class="flex-1 bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-3xl font-semibold">
-                  📸 Capture Front Face
-                </button>
+              <!-- Captured thumbnails -->
+              <div class="grid grid-cols-7 gap-1 mt-3 mb-1" id="angle-thumbnails">
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-front" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-base text-slate-600 overflow-hidden">😐</div>
+                  <span class="text-xs text-slate-500">Front</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-left" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-base text-slate-600 overflow-hidden">←</div>
+                  <span class="text-xs text-slate-500">Left</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-right" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-base text-slate-600 overflow-hidden">→</div>
+                  <span class="text-xs text-slate-500">Right</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-up" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-base text-slate-600 overflow-hidden">↑</div>
+                  <span class="text-xs text-slate-500">Up</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-down" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-base text-slate-600 overflow-hidden">↓</div>
+                  <span class="text-xs text-slate-500">Down</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-tilt_left" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-base text-slate-600 overflow-hidden">↗</div>
+                  <span class="text-xs text-slate-500">T.L</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div id="thumb-tilt_right" class="w-full aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-base text-slate-600 overflow-hidden">↘</div>
+                  <span class="text-xs text-slate-500">T.R</span>
+                </div>
+              </div>
+
+              <!-- Controls -->
+              <div class="flex gap-3 mt-3">
+                <button type="button" id="capture-angle-btn" onclick="captureCurrentAngle()" class="hidden"></button>
                 <button type="button" onclick="resetAllAngles()"
-                  class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-3xl font-semibold">
-                  🔄 Reset Angles
+                  class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-3xl font-semibold text-sm">
+                  🔄 Reset & Restart
                 </button>
               </div>
 
-              <p id="register-status" class="text-sm text-slate-400 mt-3">
-                Start the camera and capture 7 angles: Front → Left → Right → Up → Down → Tilt Left → Tilt Right.
+              <p id="register-status" class="text-sm text-slate-400 mt-3 text-center">
+                Start camera — face guide will appear and auto-capture each angle.
               </p>
 
               <!-- FIX #5: Upload from photos section -->
