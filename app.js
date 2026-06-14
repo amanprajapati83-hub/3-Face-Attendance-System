@@ -618,34 +618,45 @@ async function _runGuidedLoop() {
   const angle  = ANGLES[state.currentAngleIndex];
   const config = GUIDE_ANGLE_CONFIGS[angle.key];
   const video  = dom.registerVideo;
-  const canvas = dom.registerCanvas;
   if (!video || !video.srcObject) return;
 
-  // Update SVG guide position
+  // Update SVG guide
   _updateGuideSVG(config, angle);
 
-  let result = null;
+  let aligned = false;
   try {
-    result = await extractBestFrame(video, canvas);
-  } catch (_) {}
+    const _faceapi = typeof faceapi !== "undefined" ? faceapi : window.faceapi;
+    const detection = await _faceapi
+      .detectSingleFace(video, new _faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
 
-  if (result) {
-    const aligned = _isFaceAligned(result.landmarks, config);
-    if (aligned) {
-      _guidedCountMs += 200;
-      _showAlignedRing(true, _guidedCountMs / GUIDED_HOLD_MS);
-      if (_guidedCountMs >= GUIDED_HOLD_MS) {
-        // Auto-capture this angle
-        await _autoCaptureCurrent(result, angle);
-        return;
+    if (detection) {
+      aligned = _isFaceAligned(detection.faceLandmarks, config);
+      if (aligned) {
+        _guidedCountMs += 200;
+        _showAlignedRing(true, _guidedCountMs / GUIDED_HOLD_MS);
+        if (_guidedCountMs >= GUIDED_HOLD_MS) {
+          // Auto-capture
+          const descriptor = Array.from(detection.descriptor);
+          const cvs = dom.registerCanvas;
+          cvs.width  = video.videoWidth  || 640;
+          cvs.height = video.videoHeight || 480;
+          cvs.getContext("2d").drawImage(video, 0, 0);
+          const dataUrl = cvs.toDataURL("image/jpeg", 0.85);
+          await _autoCaptureCurrent({ descriptor, dataUrl, landmarks: detection.faceLandmarks }, angle);
+          return;
+        }
+      } else {
+        _guidedCountMs = 0;
+        _showAlignedRing(false, 0);
       }
     } else {
       _guidedCountMs = 0;
       _showAlignedRing(false, 0);
     }
-  } else {
+  } catch(e) {
     _guidedCountMs = 0;
-    _showAlignedRing(false, 0);
   }
 
   _guidedTimer = setTimeout(_runGuidedLoop, 200);
@@ -653,39 +664,49 @@ async function _runGuidedLoop() {
 
 async function _autoCaptureCurrent(firstResult, angle) {
   stopGuidedCapture();
-  const video  = dom.registerVideo;
+  const video = dom.registerVideo;
   const canvas = dom.registerCanvas;
 
-  dom.registerStatus.textContent = `✅ ${angle.label} — capturing frames…`;
+  dom.registerStatus.textContent = `✅ ${angle.label} — collecting frames…`;
   _showAlignedRing(true, 1);
 
-  // Collect multiple frames for this angle
   const collected = [firstResult.descriptor];
   const photos    = [firstResult.dataUrl];
-  const deadline  = Date.now() + REG_VIDEO_DURATION_MS;
+  const deadline  = Date.now() + 1500; // collect for 1.5 sec
 
   while (Date.now() < deadline && collected.length < REG_TARGET_EMBEDDINGS) {
     await new Promise(r => setTimeout(r, REG_FRAME_INTERVAL_MS));
     try {
-      const r = await extractBestFrame(video, canvas);
-      if (r && !isDuplicateDescriptor(r.descriptor, collected)) {
-        collected.push(r.descriptor);
-        if (photos.length < 2) photos.push(r.dataUrl);
+      const _faceapi = typeof faceapi !== "undefined" ? faceapi : window.faceapi;
+      const det = await _faceapi
+        .detectSingleFace(video, new _faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+      if (det) {
+        const desc = Array.from(det.descriptor);
+        if (!isDuplicateDescriptor(desc, collected)) {
+          collected.push(desc);
+          if (photos.length < 2) {
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            canvas.getContext("2d").drawImage(video, 0, 0);
+            photos.push(canvas.toDataURL("image/jpeg", 0.82));
+          }
+        }
       }
     } catch (_) {}
   }
 
-  const final = storeMultipleEmbeddings(collected);
-  if (!final || final.length < REG_MIN_EMBEDDINGS) {
-    dom.registerStatus.textContent = `Only ${final?.length ?? 0} frames for ${angle.label}. Hold still and try again.`;
+  if (collected.length < 1) {
+    dom.registerStatus.textContent = `No frames captured for ${angle.label}. Hold still and try again.`;
     _showAlignedRing(false, 0);
     await new Promise(r => setTimeout(r, 1200));
     _runGuidedLoop();
     return;
   }
 
-  // Save angle
-  state.angleData[angle.key] = { descriptors: final, photo: photos[0] };
+  // Save angle — accept even 1 frame
+  state.angleData[angle.key] = { descriptors: collected, photo: photos[0] };
   const thumb = document.getElementById(`thumb-${angle.key}`);
   if (thumb) {
     thumb.innerHTML = `<img src="${photos[0]}" class="w-full h-full object-cover rounded-xl" alt="${angle.key}">`;
@@ -705,11 +726,10 @@ async function _autoCaptureCurrent(firstResult, angle) {
     return;
   }
 
-  // Brief pause then move to next angle
   dom.registerStatus.textContent = `✅ ${angle.label} done! Now: ${ANGLES[state.currentAngleIndex].label}`;
   updateAngleUI();
   _showAlignedRing(false, 0);
-  await new Promise(r => setTimeout(r, 900));
+  await new Promise(r => setTimeout(r, 800));
   _runGuidedLoop();
 }
 
@@ -717,19 +737,19 @@ function _isFaceAligned(landmarks, config) {
   if (!landmarks) return false;
   try {
     const positions = landmarks.positions;
-    // Estimate yaw from eye positions relative to nose
-    const leftEye  = positions[36];
-    const rightEye = positions[45];
-    const noseTip  = positions[30];
-    const chin     = positions[8];
-    const faceW    = Math.abs(rightEye.x - leftEye.x);
-    const faceH    = Math.abs(chin.y - positions[27].y);
-    if (faceW < 40 || faceH < 40) return false; // face too small/far
+    const leftEye   = positions[36];
+    const rightEye  = positions[45];
+    const noseTip   = positions[30];
+    const eyeBrow   = positions[27];
+    const chin      = positions[8];
+    const faceW = Math.abs(rightEye.x - leftEye.x);
+    const faceH = Math.abs(chin.y - eyeBrow.y);
+    if (faceW < 30) return false; // face too far/small
 
-    const eyeMidX  = (leftEye.x + rightEye.x) / 2;
-    const yaw      = ((noseTip.x - eyeMidX) / faceW) * 90;
-    const eyeMidY  = (leftEye.y + rightEye.y) / 2;
-    const pitch    = ((noseTip.y - eyeMidY) / faceH) * 90;
+    const eyeMidX = (leftEye.x + rightEye.x) / 2;
+    const eyeMidY = (leftEye.y + rightEye.y) / 2;
+    const yaw     = faceW > 0 ? ((noseTip.x - eyeMidX) / faceW) * 90 : 0;
+    const pitch   = faceH > 0 ? ((noseTip.y - eyeMidY) / faceH) * 90 : 0;
 
     return yaw   >= config.yawMin   && yaw   <= config.yawMax &&
            pitch >= config.pitchMin && pitch <= config.pitchMax;
