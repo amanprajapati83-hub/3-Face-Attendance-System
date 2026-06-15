@@ -545,14 +545,13 @@ function cancelDuplicateRegistration() {
 function startRegisterCamera() {
   startCamera(dom.registerVideo, "register").then(async started => {
     if (!started) return;
-    // Boost brightness for registration camera
     dom.registerVideo.style.filter = "brightness(1.25) contrast(1.05)";
     dom.registerOverlay.classList.add("hidden");
     dom.startRegisterButton.classList.add("hidden");
     dom.registerStatus.textContent = "Loading face models…";
     await ensureModels();
-    dom.registerStatus.textContent = "Follow the guide — align your face to each position.";
-    startGuidedCapture();
+    dom.registerStatus.textContent = "Camera ready. Capture each angle.";
+    updateAngleUI();
   });
 }
 
@@ -560,245 +559,73 @@ function updateAngleUI() {
   const idx   = state.currentAngleIndex;
   const angle = idx < ANGLES.length ? ANGLES[idx] : null;
 
-  // Progress bar pills
   const pills = document.querySelectorAll(".angle-step-pill");
   pills.forEach((pill, i) => {
     pill.classList.remove("bg-sky-500", "bg-emerald-500", "bg-slate-700");
-    if (i < idx)      pill.classList.add("bg-emerald-500");
+    if (i < idx)        pill.classList.add("bg-emerald-500");
     else if (i === idx) pill.classList.add("bg-sky-500");
-    else              pill.classList.add("bg-slate-700");
+    else                pill.classList.add("bg-slate-700");
   });
-
-  // Glow ring color
-  const ring = document.getElementById("reg-glow-ring");
-  if (ring) {
-    if (idx >= ANGLES.length) {
-      ring.style.borderColor = "#22c55e";
-      ring.style.boxShadow   = "0 0 0 2px rgba(255,255,255,0.1),0 0 30px rgba(34,197,94,0.5),0 0 60px rgba(34,197,94,0.25)";
-    } else {
-      ring.style.borderColor = "#38bdf8";
-      ring.style.boxShadow   = "0 0 0 2px rgba(255,255,255,0.1),0 0 30px rgba(56,189,248,0.5),0 0 60px rgba(56,189,248,0.25)";
-    }
-  }
 
   const instrEl = document.getElementById("angle-instruction");
   if (instrEl) {
     instrEl.textContent = idx < ANGLES.length
-      ? `Step ${idx + 1} / ${ANGLES.length} — ${angle.instruction}`
-      : "✅ All angles captured! Fill details and register.";
-    instrEl.style.color = idx >= ANGLES.length ? "#22c55e" : "#fff";
+      ? `Step ${idx + 1} of 3: ${angle.instruction}`
+      : "All angles captured! Fill in details and register.";
   }
-
-  if (dom.captureAngleBtn) dom.captureAngleBtn.disabled = idx >= ANGLES.length;
-}
-
-// ─── Guided Auto-Capture Config ──────────────────────────────
-const GUIDE_ANGLE_CONFIGS = {
-  front:      { arrow: "",   headTx: 0,    headTy: 0,   headRz: 0,  yawMin: -12, yawMax: 12,  pitchMin: -12, pitchMax: 12  },
-  left:       { arrow: "←",  headTx: -18,  headTy: 0,   headRz: 8,  yawMin: -45, yawMax: -18, pitchMin: -15, pitchMax: 15  },
-  right:      { arrow: "→",  headTx: 18,   headTy: 0,   headRz: -8, yawMin: 18,  yawMax: 45,  pitchMin: -15, pitchMax: 15  },
-  up:         { arrow: "↑",  headTx: 0,    headTy: -18, headRz: 0,  yawMin: -15, yawMax: 15,  pitchMin: -40, pitchMax: -15 },
-  down:       { arrow: "↓",  headTx: 0,    headTy: 18,  headRz: 0,  yawMin: -15, yawMax: 15,  pitchMin: 15,  pitchMax: 40  },
-  tilt_left:  { arrow: "↗",  headTx: -12,  headTy: -12, headRz: 15, yawMin: -35, yawMax: -10, pitchMin: -35, pitchMax: -10 },
-  tilt_right: { arrow: "↘",  headTx: 12,   headTy: -12, headRz: -15,yawMin: 10,  yawMax: 35,  pitchMin: -35, pitchMax: -10 },
-};
-
-// Guided auto-capture state
-let _guidedTimer    = null;
-let _guidedAligned  = false;
-let _guidedCountMs  = 0;
-const GUIDED_HOLD_MS = 800; // hold still for 800ms to auto-capture
-
-function startGuidedCapture() {
-  stopGuidedCapture();
-  const svg = document.getElementById("reg-guide-svg");
-  if (svg) svg.style.display = "block";
-  updateAngleUI();
-  _runGuidedLoop();
-}
-
-function stopGuidedCapture() {
-  if (_guidedTimer) { clearTimeout(_guidedTimer); _guidedTimer = null; }
-  _guidedAligned = false;
-  _guidedCountMs = 0;
-}
-
-async function _runGuidedLoop() {
-  if (state.currentAngleIndex >= ANGLES.length) return;
-  const angle  = ANGLES[state.currentAngleIndex];
-  const config = GUIDE_ANGLE_CONFIGS[angle.key];
-  const video  = dom.registerVideo;
-  if (!video || !video.srcObject) return;
-
-  // Update SVG guide
-  _updateGuideSVG(config, angle);
-
-  let aligned = false;
-  try {
-    const _faceapi = typeof faceapi !== "undefined" ? faceapi : window.faceapi;
-    const detection = await _faceapi
-      .detectSingleFace(video, new _faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
-      .withFaceLandmarks()
-      .withFaceDescriptor();
-
-    if (detection) {
-      aligned = _isFaceAligned(detection.faceLandmarks, config);
-      if (aligned) {
-        _guidedCountMs += 200;
-        _showAlignedRing(true, _guidedCountMs / GUIDED_HOLD_MS);
-        if (_guidedCountMs >= GUIDED_HOLD_MS) {
-          // Auto-capture
-          const descriptor = Array.from(detection.descriptor);
-          const cvs = dom.registerCanvas;
-          cvs.width  = video.videoWidth  || 640;
-          cvs.height = video.videoHeight || 480;
-          cvs.getContext("2d").drawImage(video, 0, 0);
-          const dataUrl = cvs.toDataURL("image/jpeg", 0.85);
-          await _autoCaptureCurrent({ descriptor, dataUrl, landmarks: detection.faceLandmarks }, angle);
-          return;
-        }
-      } else {
-        _guidedCountMs = 0;
-        _showAlignedRing(false, 0);
-      }
+  if (dom.captureAngleBtn) {
+    if (idx < ANGLES.length) {
+      dom.captureAngleBtn.textContent = `📸 Capture ${angle.label}`;
+      dom.captureAngleBtn.disabled = false;
     } else {
-      _guidedCountMs = 0;
-      _showAlignedRing(false, 0);
+      dom.captureAngleBtn.textContent = "✅ All Angles Captured";
+      dom.captureAngleBtn.disabled = true;
     }
-  } catch(e) {
-    _guidedCountMs = 0;
-  }
-
-  _guidedTimer = setTimeout(_runGuidedLoop, 200);
-}
-
-async function _autoCaptureCurrent(firstResult, angle) {
-  stopGuidedCapture();
-  const video = dom.registerVideo;
-  const canvas = dom.registerCanvas;
-
-  dom.registerStatus.textContent = `✅ ${angle.label} — collecting frames…`;
-  _showAlignedRing(true, 1);
-
-  const collected = [firstResult.descriptor];
-  const photos    = [firstResult.dataUrl];
-  const deadline  = Date.now() + 1500; // collect for 1.5 sec
-
-  while (Date.now() < deadline && collected.length < REG_TARGET_EMBEDDINGS) {
-    await new Promise(r => setTimeout(r, REG_FRAME_INTERVAL_MS));
-    try {
-      const _faceapi = typeof faceapi !== "undefined" ? faceapi : window.faceapi;
-      const det = await _faceapi
-        .detectSingleFace(video, new _faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-      if (det) {
-        const desc = Array.from(det.descriptor);
-        if (!isDuplicateDescriptor(desc, collected)) {
-          collected.push(desc);
-          if (photos.length < 2) {
-            canvas.width = video.videoWidth || 640;
-            canvas.height = video.videoHeight || 480;
-            canvas.getContext("2d").drawImage(video, 0, 0);
-            photos.push(canvas.toDataURL("image/jpeg", 0.82));
-          }
-        }
-      }
-    } catch (_) {}
-  }
-
-  if (collected.length < 1) {
-    dom.registerStatus.textContent = `No frames captured for ${angle.label}. Hold still and try again.`;
-    _showAlignedRing(false, 0);
-    await new Promise(r => setTimeout(r, 1200));
-    _runGuidedLoop();
-    return;
-  }
-
-  // Save angle — accept even 1 frame
-  state.angleData[angle.key] = { descriptors: collected, photo: photos[0] };
-  const thumb = document.getElementById(`thumb-${angle.key}`);
-  if (thumb) {
-    thumb.innerHTML = `<img src="${photos[0]}" class="w-full h-full object-cover rounded-xl" alt="${angle.key}">`;
-    thumb.style.borderColor = "#10b981";
-    thumb.style.borderStyle = "solid";
-  }
-
-  state.currentAngleIndex += 1;
-  playSound("captured");
-
-  if (state.currentAngleIndex >= ANGLES.length) {
-    _showAlignedRing(false, 0);
-    const svg = document.getElementById("reg-guide-svg");
-    if (svg) svg.style.display = "none";
-    mergeAngleDescriptors();
-    updateAngleUI();
-    return;
-  }
-
-  dom.registerStatus.textContent = `✅ ${angle.label} done! Now: ${ANGLES[state.currentAngleIndex].label}`;
-  updateAngleUI();
-  _showAlignedRing(false, 0);
-  await new Promise(r => setTimeout(r, 800));
-  _runGuidedLoop();
-}
-
-function _isFaceAligned(landmarks, config) {
-  if (!landmarks) return false;
-  try {
-    const positions = landmarks.positions;
-    const leftEye   = positions[36];
-    const rightEye  = positions[45];
-    const noseTip   = positions[30];
-    const eyeBrow   = positions[27];
-    const chin      = positions[8];
-    const faceW = Math.abs(rightEye.x - leftEye.x);
-    const faceH = Math.abs(chin.y - eyeBrow.y);
-    if (faceW < 30) return false; // face too far/small
-
-    const eyeMidX = (leftEye.x + rightEye.x) / 2;
-    const eyeMidY = (leftEye.y + rightEye.y) / 2;
-    const yaw     = faceW > 0 ? ((noseTip.x - eyeMidX) / faceW) * 90 : 0;
-    const pitch   = faceH > 0 ? ((noseTip.y - eyeMidY) / faceH) * 90 : 0;
-
-    return yaw   >= config.yawMin   && yaw   <= config.yawMax &&
-           pitch >= config.pitchMin && pitch <= config.pitchMax;
-  } catch (_) { return false; }
-}
-
-function _updateGuideSVG(config, angle) {
-  const group  = document.getElementById("guide-face-group");
-  const arrow  = document.getElementById("guide-arrow");
-  const instrEl = document.getElementById("angle-instruction");
-  if (group)  group.setAttribute("transform", `translate(${config.headTx}, ${config.headTy}) rotate(${config.headRz}, 150, 145)`);
-  if (arrow)  arrow.textContent = config.arrow;
-  if (instrEl) instrEl.textContent = `Step ${state.currentAngleIndex + 1} of ${ANGLES.length}: ${angle.instruction}`;
-}
-
-function _showAlignedRing(aligned, progress) {
-  const ring        = document.getElementById("guide-match-ring");
-  const countdown   = document.getElementById("guide-countdown");
-  const head        = document.getElementById("guide-head");
-  const glowRing    = document.getElementById("reg-glow-ring");
-  const circumference = 2 * Math.PI * 90;
-  if (ring)      ring.style.opacity  = aligned ? "0.9" : "0";
-  if (head)      head.style.stroke   = aligned ? "rgba(34,197,94,0.8)" : "rgba(56,189,248,0.65)";
-  if (glowRing && aligned) {
-    glowRing.style.borderColor = "#22c55e";
-    glowRing.style.boxShadow   = "0 0 0 2px rgba(255,255,255,0.1),0 0 30px rgba(34,197,94,0.6),0 0 60px rgba(34,197,94,0.3)";
-  } else if (glowRing) {
-    glowRing.style.borderColor = "#38bdf8";
-    glowRing.style.boxShadow   = "0 0 0 2px rgba(255,255,255,0.1),0 0 30px rgba(56,189,248,0.5),0 0 60px rgba(56,189,248,0.25)";
-  }
-  if (countdown) {
-    countdown.style.opacity          = aligned ? "1" : "0";
-    countdown.style.strokeDashoffset = circumference * (1 - progress);
   }
 }
 
-// Keep original captureCurrentAngle for manual fallback (hidden button)
 async function captureCurrentAngle() {
-  await captureRegisterPhoto();
+  if (!dom.registerVideo.srcObject) {
+    alert("Please start camera first.");
+    return;
+  }
+  const idx = state.currentAngleIndex;
+  if (idx >= ANGLES.length) return;
+  const angle = ANGLES[idx];
+  dom.registerStatus.textContent = `Scanning ${angle.label}… Hold steady.`;
+  if (dom.captureAngleBtn) dom.captureAngleBtn.disabled = true;
+  try {
+    await ensureModels();
+    const { descriptors, bestFrameUrl } = await captureAngleVideo(dom.registerVideo, dom.registerCanvas, angle);
+    if (!descriptors || descriptors.length < REG_MIN_EMBEDDINGS) {
+      dom.registerStatus.textContent =
+        `Only ${descriptors?.length ?? 0} quality frames for ${angle.label} (need ${REG_MIN_EMBEDDINGS}+). Try again.`;
+      if (dom.captureAngleBtn) dom.captureAngleBtn.disabled = false;
+      return;
+    }
+    state.angleData[angle.key] = { descriptors, photo: bestFrameUrl };
+    const thumb = document.getElementById(`thumb-${angle.key}`);
+    if (thumb) {
+      thumb.innerHTML = `<img src="${bestFrameUrl}" class="w-full h-full object-cover rounded-2xl" alt="${angle.key}">`;
+      thumb.style.borderColor = "#10b981";
+      thumb.style.borderStyle = "solid";
+    }
+    dom.registerStatus.textContent =
+      `✅ ${angle.label} captured (${descriptors.length} frames).` +
+      (idx + 1 < ANGLES.length ? ` Now capture ${ANGLES[idx + 1].label}.` : " All angles done!");
+    state.currentAngleIndex += 1;
+    updateAngleUI();
+    if (state.currentAngleIndex >= ANGLES.length) {
+      mergeAngleDescriptors();
+    }
+  } catch (err) {
+    dom.registerStatus.textContent = err.message;
+    if (dom.captureAngleBtn) dom.captureAngleBtn.disabled = false;
+  }
+}
+
+function captureRegisterPhoto() {
+  captureCurrentAngle();
 }
 
 async function captureAngleVideo(videoElement, canvasElement) {
@@ -836,45 +663,13 @@ function mergeAngleDescriptors() {
     if (d?.descriptors?.length) all.push(...d.descriptors);
   }
   state.registerDescriptors = all;
-  state.registerPhoto = state.angleData.front?.photo
-    || state.angleData.left?.photo
-    || state.angleData.right?.photo
-    || state.angleData.up?.photo
-    || state.angleData.down?.photo;
+  state.registerPhoto = state.angleData.front?.photo || state.angleData.left?.photo || state.angleData.right?.photo;
   if (state.registerPhoto) {
     dom.registerPhotoPreview.src = state.registerPhoto;
     dom.registerPreview.classList.remove("hidden");
   }
   dom.registerStatus.textContent =
-    `✅ All ${ANGLES.length} angles captured (${all.length} total face samples). Fill details and register.`;
-}
-
-async function captureAngleVideo(videoElement, canvasElement) {
-  const collected = [];
-  const photos    = [];
-  const startTime = Date.now();
-  return new Promise((resolve) => {
-    state.regCapturing = true;
-    state.regFrameTimerId = setInterval(async () => {
-      const elapsed = Date.now() - startTime;
-      if (elapsed >= REG_VIDEO_DURATION_MS || collected.length >= REG_TARGET_EMBEDDINGS || !state.regCapturing) {
-        clearInterval(state.regFrameTimerId);
-        state.regFrameTimerId = null;
-        state.regCapturing = false;
-        const final = storeMultipleEmbeddings(collected);
-        resolve({ descriptors: final, bestFrameUrl: photos[0] || captureFrameAsDataUrl(videoElement, canvasElement) });
-        return;
-      }
-      const result = await extractBestFrame(videoElement, canvasElement);
-      if (result) {
-        const { descriptor, dataUrl } = result;
-        if (!isDuplicateDescriptor(descriptor, collected)) {
-          collected.push(descriptor);
-          if (photos.length < 2) photos.push(dataUrl);
-        }
-      }
-    }, REG_FRAME_INTERVAL_MS);
-  });
+    `✅ All 3 angles captured (${all.length} total face samples). Fill details and register.`;
 }
 
 async function captureRegisterPhoto() {
