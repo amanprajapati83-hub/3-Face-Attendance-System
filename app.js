@@ -157,11 +157,8 @@ function initApp() {
   showSection("home");
   setupOverlayCanvas();
   updateDashboardStats();
-  renderStudentsGrid();
-  renderAttendanceTable();
-  // Init unidentified badge after DOM is ready
+  // Don't render heavy lists on startup — render only when tab is opened
   setTimeout(updateUnidentifiedBadge, 0);
-  // Init auto-backup scheduler
   initAutoBackup();
   loadSmsGatewayUrl();
 }
@@ -295,7 +292,15 @@ function migrateAvgDescriptors() {
   if (changed) saveAvgDescriptors();
 }
 
-function saveData() {
+// ─── Debounced saveData ───────────────────────────────────────
+let _saveDataTimer = null;
+function saveData(immediate = false) {
+  if (immediate) { _doSaveData(); return; }
+  clearTimeout(_saveDataTimer);
+  _saveDataTimer = setTimeout(_doSaveData, 800);
+}
+
+function _doSaveData() {
   try {
     localStorage.setItem(STORAGE_KEYS.settings,     JSON.stringify(state.settings));
     localStorage.setItem(STORAGE_KEYS.students,     JSON.stringify(state.students));
@@ -303,18 +308,21 @@ function saveData() {
     localStorage.setItem(STORAGE_KEYS.trash,        JSON.stringify(state.trash));
     localStorage.setItem(STORAGE_KEYS.unidentified, JSON.stringify(state.unidentified));
     updateDashboardStats();
-    renderStudentsGrid();
-    renderAttendanceTable();
+    // Only re-render the currently visible tab
+    const active = state.activeSection;
+    if (active === "records") {
+      if (!dom.studentsListView?.classList.contains("hidden")) renderStudentsGrid();
+      else renderAttendanceTable();
+    }
+    if (active === "trash")        renderTrash();
+    if (active === "unidentified") renderUnidentifiedList();
   } catch (e) {
     console.error("saveData failed:", e);
-    // If quota exceeded, try without scanPhoto
     try {
       const attendanceLight = state.attendances.map(a => ({ ...a, scanPhoto: "" }));
       localStorage.setItem(STORAGE_KEYS.attendance, JSON.stringify(attendanceLight));
       localStorage.setItem(STORAGE_KEYS.students,   JSON.stringify(state.students));
       updateDashboardStats();
-      renderStudentsGrid();
-      renderAttendanceTable();
     } catch (e2) {
       console.error("saveData fallback also failed:", e2);
     }
@@ -345,6 +353,7 @@ function showSection(section) {
   if (state.scanLocked && section !== "attendance") {
     return; // locked — can't navigate away
   }
+  state.activeSection = section;
   dom.sections.forEach(el => el.classList.add("hidden"));
   document.getElementById(`section-${section}`)?.classList.remove("hidden");
   dom.tabs.forEach(t => t.classList.remove("nav-active"));
@@ -361,9 +370,10 @@ function showSection(section) {
     if (section !== "register") resetRegisterCaptureUi();
     if (section !== "attendance") resetAttendanceCaptureUi();
   }
-  if (section === "records") showStudentsList();
-  if (section === "trash")   renderTrash();
-  if (section === "unidentified") renderUnidentifiedList();
+  // Lazy render — only render when tab is actually opened
+  if (section === "records") requestAnimationFrame(() => showStudentsList());
+  if (section === "trash")   requestAnimationFrame(() => renderTrash());
+  if (section === "unidentified") requestAnimationFrame(() => renderUnidentifiedList());
 }
 
 // ─── Camera core ──────────────────────────────────────────────
@@ -535,6 +545,8 @@ function cancelDuplicateRegistration() {
 function startRegisterCamera() {
   startCamera(dom.registerVideo, "register").then(async started => {
     if (!started) return;
+    // Boost brightness for registration camera
+    dom.registerVideo.style.filter = "brightness(1.25) contrast(1.05)";
     dom.registerOverlay.classList.add("hidden");
     dom.startRegisterButton.classList.add("hidden");
     dom.registerStatus.textContent = "Loading face models…";
@@ -546,40 +558,38 @@ function startRegisterCamera() {
 
 function updateAngleUI() {
   const idx   = state.currentAngleIndex;
-  const angle = ANGLES[idx];
+  const angle = idx < ANGLES.length ? ANGLES[idx] : null;
+
+  // Progress bar pills
   const pills = document.querySelectorAll(".angle-step-pill");
   pills.forEach((pill, i) => {
-    pill.classList.remove(
-      "border-sky-500", "bg-sky-500/10", "text-sky-300",
-      "border-emerald-500", "bg-emerald-500/10", "text-emerald-300",
-      "border-slate-600", "text-slate-500"
-    );
-    if (i < idx) {
-      pill.classList.add("border-emerald-500", "bg-emerald-500/10", "text-emerald-300");
-      pill.textContent = "✓ " + ANGLES[i].icon;
-    } else if (i === idx) {
-      pill.classList.add("border-sky-500", "bg-sky-500/10", "text-sky-300");
-      pill.textContent = ANGLES[i].label;
-    } else {
-      pill.classList.add("border-slate-600", "text-slate-500");
-      pill.textContent = ANGLES[i].icon;
-    }
+    pill.classList.remove("bg-sky-500", "bg-emerald-500", "bg-slate-700");
+    if (i < idx)      pill.classList.add("bg-emerald-500");
+    else if (i === idx) pill.classList.add("bg-sky-500");
+    else              pill.classList.add("bg-slate-700");
   });
+
+  // Glow ring color
+  const ring = document.getElementById("reg-glow-ring");
+  if (ring) {
+    if (idx >= ANGLES.length) {
+      ring.style.borderColor = "#22c55e";
+      ring.style.boxShadow   = "0 0 0 2px rgba(255,255,255,0.1),0 0 30px rgba(34,197,94,0.5),0 0 60px rgba(34,197,94,0.25)";
+    } else {
+      ring.style.borderColor = "#38bdf8";
+      ring.style.boxShadow   = "0 0 0 2px rgba(255,255,255,0.1),0 0 30px rgba(56,189,248,0.5),0 0 60px rgba(56,189,248,0.25)";
+    }
+  }
+
   const instrEl = document.getElementById("angle-instruction");
   if (instrEl) {
     instrEl.textContent = idx < ANGLES.length
-      ? `Step ${idx + 1} of ${ANGLES.length}: ${angle.instruction}`
-      : "All angles captured! Fill in details and register.";
+      ? `Step ${idx + 1} / ${ANGLES.length} — ${angle.instruction}`
+      : "✅ All angles captured! Fill details and register.";
+    instrEl.style.color = idx >= ANGLES.length ? "#22c55e" : "#fff";
   }
-  if (dom.captureAngleBtn) {
-    if (idx < ANGLES.length) {
-      dom.captureAngleBtn.textContent = `📸 Capture ${angle.label}`;
-      dom.captureAngleBtn.disabled = false;
-    } else {
-      dom.captureAngleBtn.textContent = "✅ All Angles Captured";
-      dom.captureAngleBtn.disabled = true;
-    }
-  }
+
+  if (dom.captureAngleBtn) dom.captureAngleBtn.disabled = idx >= ANGLES.length;
 }
 
 // ─── Guided Auto-Capture Config ──────────────────────────────
@@ -766,17 +776,23 @@ function _updateGuideSVG(config, angle) {
 }
 
 function _showAlignedRing(aligned, progress) {
-  const ring      = document.getElementById("guide-match-ring");
-  const countdown = document.getElementById("guide-countdown");
-  const head      = document.getElementById("guide-head");
-  const circumference = 2 * Math.PI * 96; // r=96
-  if (ring)      ring.style.opacity = aligned ? "0.9" : "0";
-  if (head)      head.style.stroke  = aligned ? "#22c55e" : "#38bdf8";
+  const ring        = document.getElementById("guide-match-ring");
+  const countdown   = document.getElementById("guide-countdown");
+  const head        = document.getElementById("guide-head");
+  const glowRing    = document.getElementById("reg-glow-ring");
+  const circumference = 2 * Math.PI * 90;
+  if (ring)      ring.style.opacity  = aligned ? "0.9" : "0";
+  if (head)      head.style.stroke   = aligned ? "rgba(34,197,94,0.8)" : "rgba(56,189,248,0.65)";
+  if (glowRing && aligned) {
+    glowRing.style.borderColor = "#22c55e";
+    glowRing.style.boxShadow   = "0 0 0 2px rgba(255,255,255,0.1),0 0 30px rgba(34,197,94,0.6),0 0 60px rgba(34,197,94,0.3)";
+  } else if (glowRing) {
+    glowRing.style.borderColor = "#38bdf8";
+    glowRing.style.boxShadow   = "0 0 0 2px rgba(255,255,255,0.1),0 0 30px rgba(56,189,248,0.5),0 0 60px rgba(56,189,248,0.25)";
+  }
   if (countdown) {
-    countdown.style.opacity      = aligned ? "1" : "0";
-    countdown.style.stroke       = "#22c55e";
-    const offset = circumference * (1 - progress);
-    countdown.style.strokeDashoffset = offset;
+    countdown.style.opacity          = aligned ? "1" : "0";
+    countdown.style.strokeDashoffset = circumference * (1 - progress);
   }
 }
 
@@ -2500,48 +2516,58 @@ function renderStudentsGrid(searchQuery) {
   }
   if (noResults) noResults.classList.add("hidden");
 
-  filtered.forEach(student => {
-    const card = document.createElement("div");
-    card.className =
-      "bg-slate-900 border border-slate-700 hover:border-sky-400 rounded-3xl p-5 transition-all";
-    const embBadge = student.embeddingCount
-      ? `<div class="text-xs text-sky-400 mt-1">🧠 ${student.embeddingCount} face samples</div>` : "";
-    const angleInfo = student.angleData
-      ? Object.entries(student.angleData)
-          .filter(([, v]) => v)
-          .map(([k]) => `<span class="inline-block bg-emerald-500/10 text-emerald-400 text-xs px-2 py-0.5 rounded-lg">${k}</span>`)
-          .join("")
-      : "";
-    card.innerHTML = `
-      <img src="${escapeHtml(student.facePhoto||"")}"
-           class="w-full aspect-square object-cover rounded-3xl mb-4 bg-slate-800"
-           alt="${escapeHtml(student.name)}">
-      <div class="font-semibold text-lg">${escapeHtml(student.name)}</div>
-      <div class="flex justify-between text-sm mt-1 gap-4">
-        <span class="text-slate-400">Roll ${escapeHtml(student.roll)}</span>
-        <span class="font-medium">${escapeHtml(student.class)}</span>
-      </div>
-      ${embBadge}
-      ${angleInfo ? `<div class="flex gap-1 flex-wrap mt-2">${angleInfo}</div>` : ""}
-      <div class="text-xs text-slate-400 mt-4 space-y-1">
-        <div>📱 Student: ${escapeHtml(student.studentPhone||"-")}</div>
-        <div>👨‍👩‍👧 Parent: ${escapeHtml(student.parentPhone||"-")}</div>
-      </div>
-      <div class="flex gap-2 mt-4">
-        <button type="button"
-          class="flex-1 text-xs bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 px-3 py-2 rounded-2xl font-medium transition-colors"
-          onclick="openEditModal('${escapeHtml(student.id)}')">
-          ✏️ Edit
-        </button>
-        <button type="button"
-          class="flex-1 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-2xl font-medium transition-colors"
-          onclick="deleteStudent('${escapeHtml(student.id)}')">
-          🗑️ Delete
-        </button>
-      </div>
-    `;
-    dom.studentsGrid.appendChild(card);
-  });
+  // Chunked rendering — render 20 at a time to keep UI responsive
+  const CHUNK = 20;
+  let idx = 0;
+  function renderChunk() {
+    const end = Math.min(idx + CHUNK, filtered.length);
+    const frag = document.createDocumentFragment();
+    for (; idx < end; idx++) {
+      const student = filtered[idx];
+      const card = document.createElement("div");
+      card.className = "bg-slate-900 border border-slate-700 hover:border-sky-400 rounded-3xl p-5 transition-all";
+      const embBadge = student.embeddingCount
+        ? `<div class="text-xs text-sky-400 mt-1">🧠 ${student.embeddingCount} face samples</div>` : "";
+      const angleInfo = student.angleData
+        ? Object.entries(student.angleData)
+            .filter(([, v]) => v)
+            .map(([k]) => `<span class="inline-block bg-emerald-500/10 text-emerald-400 text-xs px-2 py-0.5 rounded-lg">${k}</span>`)
+            .join("")
+        : "";
+      card.innerHTML = `
+        <img src="${escapeHtml(student.facePhoto||"")}"
+             class="w-full aspect-square object-cover rounded-3xl mb-4 bg-slate-800"
+             alt="${escapeHtml(student.name)}">
+        <div class="font-semibold text-lg">${escapeHtml(student.name)}</div>
+        <div class="flex justify-between text-sm mt-1 gap-4">
+          <span class="text-slate-400">Roll ${escapeHtml(student.roll)}</span>
+          <span class="font-medium">${escapeHtml(student.class)}</span>
+        </div>
+        ${embBadge}
+        ${angleInfo ? `<div class="flex gap-1 flex-wrap mt-2">${angleInfo}</div>` : ""}
+        <div class="text-xs text-slate-400 mt-4 space-y-1">
+          <div>📱 Student: ${escapeHtml(student.studentPhone||"-")}</div>
+          <div>👨‍👩‍👧 Parent: ${escapeHtml(student.parentPhone||"-")}</div>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button type="button"
+            class="flex-1 text-xs bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 px-3 py-2 rounded-2xl font-medium transition-colors"
+            onclick="openEditModal('${escapeHtml(student.id)}')">
+            ✏️ Edit
+          </button>
+          <button type="button"
+            class="flex-1 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-2xl font-medium transition-colors"
+            onclick="deleteStudent('${escapeHtml(student.id)}')">
+            🗑️ Delete
+          </button>
+        </div>
+      `;
+      frag.appendChild(card);
+    }
+    dom.studentsGrid.appendChild(frag);
+    if (idx < filtered.length) requestAnimationFrame(renderChunk);
+  }
+  requestAnimationFrame(renderChunk);
 }
 
 function showAttendanceList() {
@@ -2614,63 +2640,69 @@ function renderAttendanceTable() {
     return;
   }
 
-  records.forEach(record => {
-    const row = document.createElement("tr");
-    row.className = "border-b border-slate-700 last:border-none hover:bg-slate-800/50";
-    const matchLabel = record.matchPercent !== null && record.matchPercent !== undefined
-      ? `${record.matchPercent}%` : "";
-    // FIX #4: WhatsApp sent status column
-    const waStatus = record.waSent
-      ? `<span class="text-emerald-400 text-xs font-semibold">✅ Sent</span>`
-      : `<span class="text-slate-500 text-xs">Not sent</span>`;
-    const profileBadge = record.profileStatus === "deleted"
-      ? `<span class="ml-1 text-xs bg-red-500/15 text-red-400 px-2 py-0.5 rounded-lg">Deleted Profile</span>`
-      : `<span class="ml-1 text-xs bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-lg">Active</span>`;
-    row.innerHTML = `
-      <td class="px-4 py-4 text-xs">${escapeHtml(record.formattedTime)}</td>
-      <td class="px-4 py-4 font-medium">${escapeHtml(record.name)}${matchLabel ? `<span class="ml-2 text-xs text-emerald-400">${matchLabel}</span>` : ""}</td>
-      <td class="px-4 py-4 text-sm">${escapeHtml(record.roll)}</td>
-      <td class="px-4 py-4 text-sm">${escapeHtml(record.class)}</td>
-      <td class="px-4 py-4">${profileBadge}</td>
-      <td class="px-4 py-4 text-center">${waStatus}</td>
-      <td class="px-4 py-4 text-right">
-        <div class="flex gap-2 justify-end">
-          <button type="button"
-            class="attendance-wa-btn text-emerald-400 text-xs font-medium px-3 py-2 bg-emerald-400/10 hover:bg-emerald-400/20 rounded-2xl"
-            data-record-id="${escapeHtml(record.id)}">
-            📤 WA
-          </button>
-          <button type="button"
-            class="attendance-del-btn text-red-400 text-xs font-medium px-3 py-2 bg-red-400/10 hover:bg-red-400/20 rounded-2xl"
-            data-record-id="${escapeHtml(record.id)}">
-            🗑️
-          </button>
-        </div>
-      </td>
-    `;
-    row.querySelector(".attendance-wa-btn")?.addEventListener("click", function() {
-      const rec = state.attendances.find(e => e.id === record.id);
-      if (rec) {
-        openWhatsappForRecord(rec);
-        markWaSent(rec.id);
-        // Immediately update status cell
-        const statusCell = row.querySelectorAll("td")[5];
-        if (statusCell) {
-          statusCell.innerHTML = `<span class="text-emerald-400 text-xs font-semibold">✅ Sent</span>`;
+  // Chunked rendering — render 30 rows at a time
+  const CHUNK = 30;
+  let idx = 0;
+  function renderChunk() {
+    const end = Math.min(idx + CHUNK, records.length);
+    const frag = document.createDocumentFragment();
+    for (; idx < end; idx++) {
+      const record = records[idx];
+      const row = document.createElement("tr");
+      row.className = "border-b border-slate-700 last:border-none hover:bg-slate-800/50";
+      const matchLabel = record.matchPercent !== null && record.matchPercent !== undefined
+        ? `${record.matchPercent}%` : "";
+      const waStatus = record.waSent
+        ? `<span class="text-emerald-400 text-xs font-semibold">✅ Sent</span>`
+        : `<span class="text-slate-500 text-xs">Not sent</span>`;
+      const profileBadge = record.profileStatus === "deleted"
+        ? `<span class="ml-1 text-xs bg-red-500/15 text-red-400 px-2 py-0.5 rounded-lg">Deleted Profile</span>`
+        : `<span class="ml-1 text-xs bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-lg">Active</span>`;
+      row.innerHTML = `
+        <td class="px-4 py-4 text-xs">${escapeHtml(record.formattedTime)}</td>
+        <td class="px-4 py-4 font-medium">${escapeHtml(record.name)}${matchLabel ? `<span class="ml-2 text-xs text-emerald-400">${matchLabel}</span>` : ""}</td>
+        <td class="px-4 py-4 text-sm">${escapeHtml(record.roll)}</td>
+        <td class="px-4 py-4 text-sm">${escapeHtml(record.class)}</td>
+        <td class="px-4 py-4">${profileBadge}</td>
+        <td class="px-4 py-4 text-center">${waStatus}</td>
+        <td class="px-4 py-4 text-right">
+          <div class="flex gap-2 justify-end">
+            <button type="button"
+              class="attendance-wa-btn text-emerald-400 text-xs font-medium px-3 py-2 bg-emerald-400/10 hover:bg-emerald-400/20 rounded-2xl"
+              data-record-id="${escapeHtml(record.id)}">
+              📤 WA
+            </button>
+            <button type="button"
+              class="attendance-del-btn text-red-400 text-xs font-medium px-3 py-2 bg-red-400/10 hover:bg-red-400/20 rounded-2xl"
+              data-record-id="${escapeHtml(record.id)}">
+              🗑️
+            </button>
+          </div>
+        </td>
+      `;
+      row.querySelector(".attendance-wa-btn")?.addEventListener("click", function() {
+        const rec = state.attendances.find(e => e.id === record.id);
+        if (rec) {
+          openWhatsappForRecord(rec);
+          markWaSent(rec.id);
+          const statusCell = row.querySelectorAll("td")[5];
+          if (statusCell) statusCell.innerHTML = `<span class="text-emerald-400 text-xs font-semibold">✅ Sent</span>`;
+          this.textContent = '✅ Sent';
+          this.style.background = 'rgba(16,185,129,0.2)';
+          this.style.color = '#10b981';
+          this.disabled = true;
+          this.style.cursor = 'default';
         }
-        // Immediately update the button itself to show sent
-        this.textContent = '✅ Sent';
-        this.style.background = 'rgba(16,185,129,0.2)';
-        this.style.color = '#10b981';
-        this.disabled = true;
-        this.style.cursor = 'default';
-      }
-    });
-    row.querySelector(".attendance-del-btn")?.addEventListener("click", () => {
-      deleteAttendanceRecord(record.id);
-    });
-    dom.attendanceTableBody.appendChild(row);
-  });
+      });
+      row.querySelector(".attendance-del-btn")?.addEventListener("click", () => {
+        deleteAttendanceRecord(record.id);
+      });
+      frag.appendChild(row);
+    }
+    dom.attendanceTableBody.appendChild(frag);
+    if (idx < records.length) requestAnimationFrame(renderChunk);
+  }
+  requestAnimationFrame(renderChunk);
 }
 
 // ─── TRASH / RECYCLE BIN ──────────────────────────────────────
