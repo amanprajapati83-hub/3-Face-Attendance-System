@@ -24,7 +24,7 @@ const DEFAULT_SETTINGS = {
 
 // ─── Registration constants ───────────────────────────────────
 const REG_VIDEO_DURATION_MS   = 3000;
-const REG_FRAME_INTERVAL_MS   = 250; // increased from 90ms for performance
+const REG_FRAME_INTERVAL_MS   = 90;
 const REG_TARGET_EMBEDDINGS   = 10;
 const REG_MIN_EMBEDDINGS      = 3;
 const REG_MIN_FACE_FRACTION   = 0.08;
@@ -1140,8 +1140,7 @@ async function registerStudent(event) {
   computeAndCacheAvgDescriptor(student);
   saveAvgDescriptors();
 
-  // ── FIX #1: Save first, THEN reset UI ────────────────────────
-  saveData();
+  saveData(true);
 
   // Reset form and UI after saving
   dom.registerForm.reset();
@@ -3305,27 +3304,24 @@ async function captureEditAngle() {
   if (idx >= _editAngleDefs.length) return;
   const angleKey = _editAngleDefs[idx].key;
   const status = document.getElementById("edit-register-status");
-  const btn    = document.getElementById("edit-capture-angle-btn");
-  if (status) status.textContent = `Scanning ${_editAngleDefs[idx].label}… Hold steady for 3 seconds.`;
-  if (btn) btn.disabled = true;
+  if (status) status.textContent = "Capturing…";
   try {
-    await ensureModels();
-    // Use the same multi-frame capture as main registration
-    const cvs = document.createElement("canvas");
-    const { descriptors, bestFrameUrl } = await captureAngleVideo(video, cvs, _editAngleDefs[idx]);
-    if (!descriptors || descriptors.length < REG_MIN_EMBEDDINGS) {
-      if (status) status.textContent = `Only ${descriptors?.length ?? 0} quality frames for ${_editAngleDefs[idx].label} (need ${REG_MIN_EMBEDDINGS}+). Try again.`;
-      if (btn) btn.disabled = false;
-      return;
-    }
-    _editAngle.descriptors[angleKey] = descriptors;
-    _editAngle.angleData[angleKey] = bestFrameUrl || "";
+    const _faceapi = typeof faceapi !== "undefined" ? faceapi : window.faceapi;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    const result = await _faceapi
+      .detectSingleFace(canvas, new _faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 }))
+      .withFaceLandmarks().withFaceDescriptor();
+    if (!result) { if (status) status.textContent = "No face detected. Try again."; return; }
+    _editAngle.descriptors[angleKey] = [Array.from(result.descriptor)];
+    _editAngle.angleData[angleKey] = canvas.toDataURL("image/jpeg", 0.8);
     _editAngle.index++;
-    if (status) status.textContent = `✅ ${_editAngleDefs[idx].label} captured (${descriptors.length} frames)!`;
+    if (status) status.textContent = `✅ ${angleKey} captured!`;
     updateEditAngleUI();
   } catch (err) {
     if (status) status.textContent = "Error: " + err.message;
-    if (btn) btn.disabled = false;
   }
 }
 
