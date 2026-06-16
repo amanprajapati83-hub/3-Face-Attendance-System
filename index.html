@@ -374,76 +374,129 @@
                 class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 rounded-2xl px-4 py-3 text-base outline-none" />
             </div>
 
-            <!-- ── Face Capture ── -->
+            <!-- Multi-angle face capture -->
             <div class="mt-4">
-              <label class="block text-sm font-semibold text-slate-300 mb-3 tracking-wide uppercase" style="font-size:11px;letter-spacing:0.08em;">Face Registration</label>
+              <label class="block text-sm font-medium text-slate-400 mb-3">Capture Student Face (3 Angles)</label>
 
-              <!-- Progress bar — 3 steps -->
-              <div class="flex items-center gap-1 mb-3" id="angle-step-indicator">
-                <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-sky-500 transition-all duration-300" data-step="0"></div>
-                <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-slate-700 transition-all duration-300" data-step="1"></div>
-                <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-slate-700 transition-all duration-300" data-step="2"></div>
+              <!-- Angle step indicator -->
+              <div id="angle-step-indicator" class="flex gap-2 mb-3">
+                <div class="angle-step-pill flex-1 text-center py-2 px-2 rounded-2xl text-xs font-semibold border-2 border-sky-500 bg-sky-500/10 text-sky-300" data-step="0">😐 Front</div>
+                <div class="angle-step-pill flex-1 text-center py-2 px-2 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="1">← Left</div>
+                <div class="angle-step-pill flex-1 text-center py-2 px-2 rounded-2xl text-xs font-semibold border-2 border-slate-600 text-slate-500" data-step="2">Right →</div>
               </div>
 
-              <!-- Step label -->
-              <div id="angle-instruction" class="text-center font-bold text-white mb-3" style="font-size:15px;min-height:22px;">
+              <!-- Angle instruction -->
+              <div id="angle-instruction" class="mb-3 text-center bg-slate-800 rounded-2xl py-2 px-3 text-sm text-slate-300">
+                Start camera, then capture each angle one by one.
+              </div>
+
+              <!-- Captured angle thumbnails -->
+              <div class="flex gap-2 mb-3" id="angle-thumbnails">
+                <div class="flex-1 flex flex-col items-center gap-1">
+                  <div id="thumb-front" class="w-full aspect-square rounded-2xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-2xl text-slate-600 overflow-hidden">😐</div>
+                  <span class="text-xs text-slate-500">Front</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center gap-1">
+                  <div id="thumb-left" class="w-full aspect-square rounded-2xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-2xl text-slate-600 overflow-hidden">←</div>
+                  <span class="text-xs text-slate-500">Left</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center gap-1">
+                  <div id="thumb-right" class="w-full aspect-square rounded-2xl bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center text-2xl text-slate-600 overflow-hidden">→</div>
+                  <span class="text-xs text-slate-500">Right</span>
+                </div>
+              </div>
+
+              <!-- Camera box -->
+              <div style="
+                width: min(72vw, 480px);
+                height: min(72vw, 480px);
+                border-radius: 50%;
+                overflow: hidden;
+                position: relative;
+                margin: 0 auto;
+                border: 8px solid rgba(255,255,255,0.9);
+                box-shadow: 0 0 0 4px rgba(255,255,255,0.2), 0 0 60px rgba(255,255,255,0.5), 0 0 100px rgba(255,255,255,0.2);
+                background: #0f172a;
+              ">
+                <video id="register-video" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;transform:scale(0.85);transform-origin:center center;"></video>
+                <canvas id="register-canvas" class="hidden"></canvas>
+                <div id="register-overlay" style="border-radius:50%;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
+                  <button type="button" onclick="startRegisterCamera()" id="start-register-btn"
+                    class="bg-white text-slate-900 px-6 py-3 rounded-3xl font-semibold flex items-center gap-x-2">
+                    <span>📸 Start Camera</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex flex-col sm:flex-row gap-3 mt-3">
+                <button type="button" id="capture-angle-btn" onclick="captureCurrentAngle()"
+                  class="flex-1 bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-3xl font-semibold">
+                  📸 Capture Front Face
+                </button>
+                <button type="button" onclick="resetAllAngles()"
+                  class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-3xl font-semibold">
+                  🔄 Reset Angles
+                </button>
+              </div>
+
+              <p id="register-status" class="text-sm text-slate-400 mt-3">
                 Start the camera and capture 3 angles: Front → Left → Right.
-              </div>
+              </p>
 
-              <!-- Camera circle -->
-              <div style="position:relative;width:min(78vw,320px);height:min(78vw,320px);margin:0 auto;">
-                <div id="reg-glow-ring" style="
-                  position:absolute;inset:-8px;border-radius:50%;z-index:5;pointer-events:none;
-                  border:5px solid #38bdf8;
-                  box-shadow:0 0 0 2px rgba(255,255,255,0.1),0 0 30px rgba(56,189,248,0.5),0 0 60px rgba(56,189,248,0.25);
-                  transition:border-color 0.3s,box-shadow 0.3s;
-                "></div>
-
-                <div style="width:100%;height:100%;border-radius:50%;overflow:hidden;position:relative;background:#0f172a;">
-                  <video id="register-video" autoplay muted playsinline
-                    style="width:100%;height:100%;object-fit:cover;display:block;filter:brightness(1.3) contrast(1.05);"></video>
-                  <canvas id="register-canvas" class="hidden"></canvas>
-
-                  <!-- Start overlay -->
-                  <div id="register-overlay" style="border-radius:50%;position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(2,6,23,0.8);gap:10px;">
-                    <div style="font-size:2.2rem;">📸</div>
-                    <button type="button" onclick="startRegisterCamera()" id="start-register-btn"
-                      style="background:linear-gradient(135deg,#0ea5e9,#3b82f6);color:#fff;border:none;padding:11px 26px;border-radius:50px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(14,165,233,0.5);letter-spacing:0.02em;">
-                      Start Camera
+              <!-- Upload from photos section -->
+              <div class="mt-5 bg-slate-800/60 rounded-2xl p-4 border border-slate-700">
+                <p class="text-sm font-medium text-slate-300 mb-3">
+                  📷 Or upload 3 photos (if student can't come in person)
+                </p>
+                <div class="grid grid-cols-3 gap-3">
+                  <div class="flex flex-col items-center gap-2">
+                    <button type="button" onclick="triggerPhotoUpload('front')"
+                      class="w-full aspect-square rounded-xl bg-slate-700 hover:bg-slate-600 border-2 border-dashed border-slate-500 hover:border-sky-400 flex flex-col items-center justify-center gap-1 transition-all overflow-hidden"
+                      id="upload-preview-front">
+                      <span class="text-2xl">😐</span>
+                      <span class="text-xs text-slate-500">Tap to upload</span>
                     </button>
+                    <span class="text-xs text-slate-400">Front photo</span>
+                  </div>
+                  <div class="flex flex-col items-center gap-2">
+                    <button type="button" onclick="triggerPhotoUpload('left')"
+                      class="w-full aspect-square rounded-xl bg-slate-700 hover:bg-slate-600 border-2 border-dashed border-slate-500 hover:border-sky-400 flex flex-col items-center justify-center gap-1 transition-all overflow-hidden"
+                      id="upload-preview-left">
+                      <span class="text-2xl">←</span>
+                      <span class="text-xs text-slate-500">Tap to upload</span>
+                    </button>
+                    <span class="text-xs text-slate-400">Left photo</span>
+                  </div>
+                  <div class="flex flex-col items-center gap-2">
+                    <button type="button" onclick="triggerPhotoUpload('right')"
+                      class="w-full aspect-square rounded-xl bg-slate-700 hover:bg-slate-600 border-2 border-dashed border-slate-500 hover:border-sky-400 flex flex-col items-center justify-center gap-1 transition-all overflow-hidden"
+                      id="upload-preview-right">
+                      <span class="text-2xl">→</span>
+                      <span class="text-xs text-slate-500">Tap to upload</span>
+                    </button>
+                    <span class="text-xs text-slate-400">Right photo</span>
                   </div>
                 </div>
+                <p class="text-xs text-slate-500 mt-2">Tip: Use clear, well-lit face photos for best recognition accuracy.</p>
               </div>
 
-              <!-- Thumbnail strip — 3 angles only -->
-              <div class="flex justify-center gap-4 mt-4" id="angle-thumbnails">
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-front" style="width:48px;height:48px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;transition:all 0.3s;">😐</div>
-                  <span style="font-size:10px;color:#64748b;">Front</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-left" style="width:48px;height:48px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;transition:all 0.3s;">←</div>
-                  <span style="font-size:10px;color:#64748b;">Left</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-right" style="width:48px;height:48px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;transition:all 0.3s;">→</div>
-                  <span style="font-size:10px;color:#64748b;">Right</span>
-                </div>
+              <!-- Legacy single preview -->
+              <div id="register-preview" class="hidden mt-4">
+                <p class="text-sm text-slate-400 mb-2">Captured Face Preview</p>
+                <img id="register-photo-preview"
+                  class="w-32 h-32 object-cover rounded-3xl border-4 border-white shadow-2xl mx-auto"
+                  alt="Captured student face" />
               </div>
+            </div>
 
-              <p id="register-status" class="text-sm text-slate-400 mt-3 text-center" style="min-height:20px;"></p>
-
-              <!-- Capture button -->
-              <button type="button" id="capture-angle-btn" onclick="captureCurrentAngle()"
-                class="w-full mt-3 bg-sky-500 hover:bg-sky-400 active:scale-95 text-white font-bold py-3 rounded-2xl text-sm transition-all"
-                disabled>
-                📸 Capture Front
-              </button>
-
-              <button type="button" onclick="resetAllAngles()"
-                class="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-2xl font-medium text-sm transition-colors">
-                🔄 Reset &amp; Restart
-              </button>
+            <button type="submit" id="register-submit-btn"
+              class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-3xl text-xl font-semibold mt-4">
+              ✅ Register Student
+            </button>
+          </form>
+        </div>
+      </div>
+      <!-- end REGISTER -->
 
               <!-- FIX #5: Upload from photos section -->
               <div class="mt-5 bg-slate-800/60 rounded-2xl p-4 border border-slate-700">
