@@ -543,38 +543,42 @@ function cancelDuplicateRegistration() {
 
 // ─── MULTI-ANGLE REGISTRATION ─────────────────────────────────
 function startRegisterCamera() {
-  startCamera(dom.registerVideo, "register").then(async started => {
+  startCamera(dom.registerVideo, "register").then(started => {
     if (!started) return;
-    dom.registerVideo.style.filter = "brightness(1.25) contrast(1.05)";
     dom.registerOverlay.classList.add("hidden");
     dom.startRegisterButton.classList.add("hidden");
-    dom.registerStatus.textContent = "Loading face models…";
-    await ensureModels();
-    dom.registerStatus.textContent = "Camera ready. Capture each angle.";
-    if (dom.captureAngleBtn) dom.captureAngleBtn.disabled = false;
     updateAngleUI();
+    dom.registerStatus.textContent = "Camera ready. Capture each angle one by one.";
   });
 }
 
 function updateAngleUI() {
   const idx   = state.currentAngleIndex;
-  const angle = idx < ANGLES.length ? ANGLES[idx] : null;
-
+  const angle = ANGLES[idx];
   const pills = document.querySelectorAll(".angle-step-pill");
   pills.forEach((pill, i) => {
-    pill.classList.remove("bg-sky-500", "bg-emerald-500", "bg-slate-700");
-    if (i < idx)        pill.classList.add("bg-emerald-500");
-    else if (i === idx) pill.classList.add("bg-sky-500");
-    else                pill.classList.add("bg-slate-700");
+    pill.classList.remove(
+      "border-sky-500", "bg-sky-500/10", "text-sky-300",
+      "border-emerald-500", "bg-emerald-500/10", "text-emerald-300",
+      "border-slate-600", "text-slate-500"
+    );
+    if (i < idx) {
+      pill.classList.add("border-emerald-500", "bg-emerald-500/10", "text-emerald-300");
+      pill.textContent = ANGLES[i].label.replace(ANGLES[i].icon, "✓");
+    } else if (i === idx) {
+      pill.classList.add("border-sky-500", "bg-sky-500/10", "text-sky-300");
+      pill.textContent = ANGLES[i].label;
+    } else {
+      pill.classList.add("border-slate-600", "text-slate-500");
+      pill.textContent = ANGLES[i].label;
+    }
   });
-
   const instrEl = document.getElementById("angle-instruction");
   if (instrEl) {
     instrEl.textContent = idx < ANGLES.length
       ? `Step ${idx + 1} of 3: ${angle.instruction}`
       : "All angles captured! Fill in details and register.";
   }
-
   if (dom.captureAngleBtn) {
     if (idx < ANGLES.length) {
       dom.captureAngleBtn.textContent = `📸 Capture ${angle.label}`;
@@ -626,8 +630,20 @@ async function captureCurrentAngle() {
   }
 }
 
-function captureRegisterPhoto() {
-  captureCurrentAngle();
+function mergeAngleDescriptors() {
+  const all = [];
+  for (const angle of ANGLES) {
+    const d = state.angleData[angle.key];
+    if (d?.descriptors?.length) all.push(...d.descriptors);
+  }
+  state.registerDescriptors = all;
+  state.registerPhoto = state.angleData.front?.photo || state.angleData.left?.photo || state.angleData.right?.photo;
+  if (state.registerPhoto) {
+    dom.registerPhotoPreview.src = state.registerPhoto;
+    dom.registerPreview.classList.remove("hidden");
+  }
+  dom.registerStatus.textContent =
+    `✅ All 3 angles captured (${all.length} total face samples). Fill details and register.`;
 }
 
 async function captureAngleVideo(videoElement, canvasElement) {
@@ -658,20 +674,8 @@ async function captureAngleVideo(videoElement, canvasElement) {
   });
 }
 
-function mergeAngleDescriptors() {
-  const all = [];
-  for (const angle of ANGLES) {
-    const d = state.angleData[angle.key];
-    if (d?.descriptors?.length) all.push(...d.descriptors);
-  }
-  state.registerDescriptors = all;
-  state.registerPhoto = state.angleData.front?.photo || state.angleData.left?.photo || state.angleData.right?.photo;
-  if (state.registerPhoto) {
-    dom.registerPhotoPreview.src = state.registerPhoto;
-    dom.registerPreview.classList.remove("hidden");
-  }
-  dom.registerStatus.textContent =
-    `✅ All 3 angles captured (${all.length} total face samples). Fill details and register.`;
+async function captureRegisterPhoto() {
+  await captureCurrentAngle();
 }
 
 async function captureRegisterPhoto() {
