@@ -551,6 +551,7 @@ function startRegisterCamera() {
     dom.registerStatus.textContent = "Loading face models…";
     await ensureModels();
     dom.registerStatus.textContent = "Camera ready. Capture each angle.";
+    if (dom.captureAngleBtn) dom.captureAngleBtn.disabled = false;
     updateAngleUI();
   });
 }
@@ -573,6 +574,7 @@ function updateAngleUI() {
       ? `Step ${idx + 1} of 3: ${angle.instruction}`
       : "All angles captured! Fill in details and register.";
   }
+
   if (dom.captureAngleBtn) {
     if (idx < ANGLES.length) {
       dom.captureAngleBtn.textContent = `📸 Capture ${angle.label}`;
