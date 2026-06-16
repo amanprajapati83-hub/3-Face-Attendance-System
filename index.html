@@ -374,29 +374,24 @@
                 class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 rounded-2xl px-4 py-3 text-base outline-none" />
             </div>
 
-            <!-- ── Guided Auto Face Capture ── -->
+            <!-- ── Face Capture ── -->
             <div class="mt-4">
-              <label class="block text-sm font-semibold text-slate-300 mb-3 tracking-wide uppercase" style="font-size:11px;letter-spacing:0.08em;">Face Registration — Auto Guided</label>
+              <label class="block text-sm font-semibold text-slate-300 mb-3 tracking-wide uppercase" style="font-size:11px;letter-spacing:0.08em;">Face Registration</label>
 
-              <!-- Progress bar -->
+              <!-- Progress bar — 3 steps -->
               <div class="flex items-center gap-1 mb-3" id="angle-step-indicator">
                 <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-sky-500 transition-all duration-300" data-step="0"></div>
                 <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-slate-700 transition-all duration-300" data-step="1"></div>
                 <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-slate-700 transition-all duration-300" data-step="2"></div>
-                <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-slate-700 transition-all duration-300" data-step="3"></div>
-                <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-slate-700 transition-all duration-300" data-step="4"></div>
-                <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-slate-700 transition-all duration-300" data-step="5"></div>
-                <div class="angle-step-pill h-1.5 flex-1 rounded-full bg-slate-700 transition-all duration-300" data-step="6"></div>
               </div>
 
               <!-- Step label -->
               <div id="angle-instruction" class="text-center font-bold text-white mb-3" style="font-size:15px;min-height:22px;">
-                Tap Start Camera to begin
+                Start the camera and capture 3 angles: Front → Left → Right.
               </div>
 
               <!-- Camera circle -->
               <div style="position:relative;width:min(78vw,320px);height:min(78vw,320px);margin:0 auto;">
-                <!-- Animated glow ring outside circle -->
                 <div id="reg-glow-ring" style="
                   position:absolute;inset:-8px;border-radius:50%;z-index:5;pointer-events:none;
                   border:5px solid #38bdf8;
@@ -409,22 +404,6 @@
                     style="width:100%;height:100%;object-fit:cover;display:block;filter:brightness(1.3) contrast(1.05);"></video>
                   <canvas id="register-canvas" class="hidden"></canvas>
 
-                  <!-- SVG Guide Overlay -->
-                  <svg id="reg-guide-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none;" viewBox="0 0 300 300">
-                    <g id="guide-face-group">
-                      <ellipse id="guide-head" cx="150" cy="148" rx="66" ry="82" fill="none" stroke="rgba(56,189,248,0.65)" stroke-width="2.5" stroke-dasharray="10 5"/>
-                      <ellipse cx="124" cy="131" rx="8.5" ry="5" fill="none" stroke="rgba(56,189,248,0.5)" stroke-width="1.8"/>
-                      <ellipse cx="176" cy="131" rx="8.5" ry="5" fill="none" stroke="rgba(56,189,248,0.5)" stroke-width="1.8"/>
-                      <path d="M150 142 L145 158 Q150 163 155 158 Z" fill="none" stroke="rgba(56,189,248,0.4)" stroke-width="1.8"/>
-                      <path d="M137 172 Q150 181 163 172" fill="none" stroke="rgba(56,189,248,0.5)" stroke-width="1.8"/>
-                    </g>
-                    <text id="guide-arrow" x="150" y="30" text-anchor="middle" font-size="24" fill="#facc15" style="filter:drop-shadow(0 0 8px rgba(250,204,21,0.9))"></text>
-                    <circle id="guide-match-ring" cx="150" cy="148" r="90" fill="none" stroke="#22c55e" stroke-width="4" opacity="0" style="transition:opacity 0.2s;"/>
-                    <circle id="guide-countdown" cx="150" cy="148" r="90" fill="none" stroke="#22c55e" stroke-width="4"
-                      stroke-dasharray="565" stroke-dashoffset="565" stroke-linecap="round"
-                      transform="rotate(-90 150 148)" opacity="0"/>
-                  </svg>
-
                   <!-- Start overlay -->
                   <div id="register-overlay" style="border-radius:50%;position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(2,6,23,0.8);gap:10px;">
                     <div style="font-size:2.2rem;">📸</div>
@@ -436,44 +415,35 @@
                 </div>
               </div>
 
-              <!-- Thumbnail strip -->
-              <div class="flex justify-center gap-2 mt-4" id="angle-thumbnails">
+              <!-- Thumbnail strip — 3 angles only -->
+              <div class="flex justify-center gap-4 mt-4" id="angle-thumbnails">
                 <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-front" style="width:36px;height:36px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;transition:all 0.3s;">😐</div>
-                  <span style="font-size:9px;color:#64748b;">Front</span>
+                  <div id="thumb-front" style="width:48px;height:48px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;transition:all 0.3s;">😐</div>
+                  <span style="font-size:10px;color:#64748b;">Front</span>
                 </div>
                 <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-left" style="width:36px;height:36px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;transition:all 0.3s;">←</div>
-                  <span style="font-size:9px;color:#64748b;">Left</span>
+                  <div id="thumb-left" style="width:48px;height:48px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;transition:all 0.3s;">←</div>
+                  <span style="font-size:10px;color:#64748b;">Left</span>
                 </div>
                 <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-right" style="width:36px;height:36px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;transition:all 0.3s;">→</div>
-                  <span style="font-size:9px;color:#64748b;">Right</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-up" style="width:36px;height:36px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;transition:all 0.3s;">↑</div>
-                  <span style="font-size:9px;color:#64748b;">Up</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-down" style="width:36px;height:36px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;transition:all 0.3s;">↓</div>
-                  <span style="font-size:9px;color:#64748b;">Down</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-tilt_left" style="width:36px;height:36px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;transition:all 0.3s;">↗</div>
-                  <span style="font-size:9px;color:#64748b;">T.L</span>
-                </div>
-                <div class="flex flex-col items-center gap-1">
-                  <div id="thumb-tilt_right" style="width:36px;height:36px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;transition:all 0.3s;">↘</div>
-                  <span style="font-size:9px;color:#64748b;">T.R</span>
+                  <div id="thumb-right" style="width:48px;height:48px;border-radius:50%;background:#1e293b;border:2px dashed #334155;display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;transition:all 0.3s;">→</div>
+                  <span style="font-size:10px;color:#64748b;">Right</span>
                 </div>
               </div>
 
               <p id="register-status" class="text-sm text-slate-400 mt-3 text-center" style="min-height:20px;"></p>
+
+              <!-- Capture button -->
+              <button type="button" id="capture-angle-btn" onclick="captureCurrentAngle()"
+                class="w-full mt-3 bg-sky-500 hover:bg-sky-400 active:scale-95 text-white font-bold py-3 rounded-2xl text-sm transition-all"
+                disabled>
+                📸 Capture Front
+              </button>
+
               <button type="button" onclick="resetAllAngles()"
                 class="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-2xl font-medium text-sm transition-colors">
-                🔄 Reset & Restart
+                🔄 Reset &amp; Restart
               </button>
-              <button type="button" id="capture-angle-btn" class="hidden"></button>
 
               <!-- FIX #5: Upload from photos section -->
               <div class="mt-5 bg-slate-800/60 rounded-2xl p-4 border border-slate-700">
