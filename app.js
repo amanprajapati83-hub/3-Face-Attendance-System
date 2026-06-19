@@ -943,6 +943,14 @@ async function registerStudent(event) {
 
   saveData(true);
 
+  // ── Sync to Google Sheets ──────────────────────────────────
+  if (typeof syncStudentToSheets === "function") {
+    syncStudentToSheets(student).catch(e => console.warn("Sheet sync failed:", e));
+  }
+  if (typeof syncFaceDataToSheets === "function") {
+    syncFaceDataToSheets(student).catch(e => console.warn("Face sync failed:", e));
+  }
+
   // Reset form and UI after saving
   dom.registerForm.reset();
   resetAllAngles();
